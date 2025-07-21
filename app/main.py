@@ -25,7 +25,8 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     
-app = FastAPI(title= "Minutes of Meeting (MOM) Service",
+app = FastAPI( lifespan=lifespan,
+              title= "Minutes of Meeting (MOM) Service",
               version="1.0.0",
               description="A service to generate and manage Minutes of Meeting (MOM) from audio document using Hugging face Llama model.")
 
