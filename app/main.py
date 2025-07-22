@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
+import core.app_configuration as config
 from core.logging_config import logger
+from dotenv import load_dotenv
+from core.di import IMOMService
+
+load_dotenv()
 
 
 def register_routers(app):  
@@ -11,9 +16,7 @@ def register_routers(app):
 
 
 async def background_worker():
-    while True:
-        logger.info("Background worker running...")
-        await asyncio.sleep(10)  # Replace with your logic
+        await IMOMService().download_quantized_model_from_huggingface(model_name=config.LLAMA)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,4 +34,8 @@ app = FastAPI( lifespan=lifespan,
               description="A service to generate and manage Minutes of Meeting (MOM) from audio document using Hugging face Llama model.")
 
 register_routers(app)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
 
