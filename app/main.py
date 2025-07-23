@@ -2,9 +2,9 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 import asyncio
 import core.app_configuration as config
-from core.logging_config import logger
 from dotenv import load_dotenv
-from core.di import IMOMService
+from core.di import IMOMService, ISharedDataService
+from core.logging_config import setup_logging
 
 load_dotenv()
 
@@ -16,10 +16,11 @@ def register_routers(app):
 
 
 async def background_worker():
-        await IMOMService().download_quantized_model_from_huggingface(model_name=config.LLAMA)
+        await IMOMService(app).download_quantized_model_from_huggingface(model_name=config.LLAMA)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_logging()    
     task = asyncio.create_task(background_worker())
     yield
     task.cancel()
