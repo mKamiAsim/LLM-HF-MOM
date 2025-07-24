@@ -34,6 +34,8 @@ handlers:
     # Seq-specific settings (add any others you need, they're just kwargs for SeqLogHandler's constructor).
     server_url: 'http://localhost:5341'
     api_key: '5Z8II2S4PEgYWehtEuEG'
+    auto_flush_timeout: 2  # Flush logs to Seq every 2 seconds.
+    
 
     # Use a custom JSON encoder, if you need to.
     json_encoder_class: json.encoder.JSONEncoder
@@ -41,3 +43,4 @@ handlers:
 formatters:
   seq:
     style: '{'
+    format: '{asctime} [{levelname}] {name}: {message}'

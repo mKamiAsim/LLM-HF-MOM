@@ -5,6 +5,7 @@ import core.app_configuration as config
 from dotenv import load_dotenv
 from core.di import IMOMService, ISharedDataService
 from core.logging_config import setup_logging
+import logging
 
 load_dotenv()
 
@@ -16,11 +17,12 @@ def register_routers(app):
 
 
 async def background_worker():
-        await IMOMService(app).download_quantized_model_from_huggingface(model_name=config.LLAMA)
+        await IMOMService().download_quantized_model_from_huggingface(model_name=config.LLAMA)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    setup_logging()    
+    setup_logging() 
+    app.state.shared_data = ISharedDataService()   
     task = asyncio.create_task(background_worker())
     yield
     task.cancel()
@@ -28,6 +30,9 @@ async def lifespan(app: FastAPI):
         await task
     except asyncio.CancelledError:
         pass
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    logging.shutdown()
     
 app = FastAPI( lifespan=lifespan,
               title= "Minutes of Meeting (MOM) Service",

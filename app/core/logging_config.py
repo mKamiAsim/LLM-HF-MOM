@@ -26,7 +26,7 @@ SEQ_API_KEY = os.getenv("SEQ_API_KEY")
 # # logger.addHandler(stream_handler)
 
 def setup_logging():
-    seqlog.configure_from_file("../log_config.yml")
+    seqlog.configure_from_file("log_config.yml")
     
 #    seqlog.configure_from_dict({
 #     "version": 1,
