@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import asyncio
 import core.app_configuration as config
@@ -39,7 +41,17 @@ app = FastAPI( lifespan=lifespan,
               version="1.0.0",
               description="A service to generate and manage Minutes of Meeting (MOM) from audio document using Hugging face Llama model.")
 
+templates = Jinja2Templates(directory="templates")
+
 register_routers(app)
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request:Request):
+    return templates.TemplateResponse("home.html", 
+                                      {"request": request, 
+                                       "title": "Welcome to MOM LLM Project",
+                                       "user": "Kamran Asim"
+                                       })
 
 if __name__ == "__main__":
     import uvicorn

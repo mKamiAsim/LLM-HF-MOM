@@ -7,4 +7,5 @@ class MomResponse(BaseModel):
     id: int = Field(..., description="Unique identifier for the response")
     content: str = Field(..., description="Content of the mother's response")
     timestamp: str = Field(..., description="Timestamp of when the response was created")
+    length: int = Field(description="Length of the audio content in bytes")
     

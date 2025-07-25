@@ -23,11 +23,12 @@ class MomService:
     """
     Service for handling operations related to mother's responses.
     """
-    def generate_mom(self):                
+    def generate_mom(self, audio: bytes) -> MomResponse:                
         response= MomResponse(
             id=1,
-            content="This is a sample response from the mother.",
-            timestamp="2023-10-01T12:00:00Z"
+            content="Sample MOM response generated from audio",
+            timestamp="2023-10-01T12:00:00Z",
+            length =len(audio)
         )
         # self.logger.info("Generated MOM response {@Response}", Response = response.dict())
         self.logger.info("Generated MOM response", Response = response.dict())      
