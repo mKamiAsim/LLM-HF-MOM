@@ -101,7 +101,7 @@
             if (!response.ok) throw new Error('Failed to generate MOM');
 
             const data = await response.json();
-            momResult.textContent = data.content + data.length ;
+            momResult.textContent = data.audio_text + '\n\n' + data.mom_content;
             momResultCard.style.display = 'block';
 
         } catch (error) {
