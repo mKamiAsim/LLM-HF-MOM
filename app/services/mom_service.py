@@ -14,6 +14,8 @@ import asyncio
 from fastapi import BackgroundTasks, Depends
 import openai
 from datetime import datetime
+import soundfile as sf
+import numpy as np
 
 from services.shared_data_service import SharedDataService
 
@@ -77,18 +79,23 @@ class MomService:
                 audio_text=""
             )
         
-        system_message = "You are an assistant that produces minutes of meetings from transcripts, with summary, key discussion points, takeaways and action items with owners, in markdown."
+        system_message = "You are an assistant that produces minutes of meetings from transcripts, with summary, key discussion points, takeaways and action items with owners, in markdown. Do not add transcript in the minutes."
         user_prompt = f"Below is an extract transcript. Please write minutes in markdown, including a summary with attendees, location and date; discussion points; takeaways; and action items with owners.\n{audio_text}"
         messages = [
             {"role": "system", "content": system_message},
             {"role": "user", "content": user_prompt}
         ]
         
-                
-        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(torch.cuda.current_device() if torch.cuda.is_available() else "cpu")
+        device = "cuda" if torch.cuda.is_available() else "cpu" 
+        self.logger.info(f"Using device: {device}")           
+        self.model.to(device)    
+        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(device)
         streamer = TextStreamer(self.tokenizer)
         output= self.model.generate( inputs, max_new_tokens=2000, streamer=streamer, do_sample=True, temperature=0.7)
-        response_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
+        
+        # response_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
+        generated_tokens = output[0][inputs.shape[-1]:]
+        response_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
         
         self.logger.info("MOM response generated successfully.")
         return MomResponse(
@@ -102,19 +109,28 @@ class MomService:
     async def convert_audio_to_text(self, audio: bytes, file_name = str) -> str:
         """
         Converts audio to text using Whisper model.
-        """
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            tmp.write(audio)
-            tmp.flush()
-            temp_name = tmp.name  # Save the file name
-
-        # Now the file is closed, so libraries can access it
-        try:
-            transcript = self.asr(temp_name)
-            return transcript["text"]
-        finally:
-            os.remove(temp_name)  # Clean up manually
-    
+        """       
+        audio_buffer = io.BytesIO(audio)
+        audio_array, samplerate = sf.read(audio_buffer)
+        if len(audio_array.shape) > 1:
+            # Average across channels if multi-channel
+            audio_array = np.mean(audio_array, axis=1).astype(audio_array.dtype)
+            
+        if audio_array.dtype != np.float32:
+            audio_array = audio_array.astype(np.float32)
+        
+        def chunk_audio(data, samplerate, chunk_length_s):
+            chunk_samples = chunk_length_s * samplerate
+            for start in range(0, len(data), chunk_samples):
+                yield data[start:start + chunk_samples]
+        
+        texts = []
+        for chunk in chunk_audio(audio_array, samplerate, 30):
+            result = self.asr({"array": chunk, "sampling_rate": samplerate})
+            texts.append(result["text"].strip())
+        
+        return " ".join(texts)
+           
     
     
     
