@@ -4,7 +4,7 @@ import torch
 LLM_MODEL_PATH = "assets/models"
 LLAMA = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 LLAMA_1B="meta-llama/Llama-3.2-1B-Instruct"
-AUDIO_MODEL = "whisper-1"
+AUDIO_MODEL = "openai/whisper-medium"
 
 QUANT_CONFIG = BitsAndBytesConfig(
     load_in_4bit=True,

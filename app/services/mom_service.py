@@ -1,4 +1,5 @@
 from logging import Logger
+import tempfile
 
 from models import MomResponse
 import core.app_configuration as config
@@ -6,7 +7,7 @@ from core import EventBus
 import os
 import io
 from huggingface_hub import login
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, TextStreamer
+from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer, TextStreamer, pipeline
 import torch
 import gc
 import asyncio
@@ -22,29 +23,42 @@ class MomService:
     def __init__(self, logger:Logger, event_bus: EventBus ):
         self.logger = logger        
         self.event_bus = event_bus
+        self.model = None
+        self.tokenizer = None
+        self.model_name= config.LLAMA_1B        
+        self._load_model()
+        
+    
+    def _load_model(self):
+        try:
+            self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.asr= pipeline("automatic-speech-recognition",model=config.AUDIO_MODEL, device="cuda")
+            self.model_loading= False
+        except Exception as e:
+            self.logger.error(f"Error loading model {self.model_name}: {str(e)}")
+            self.model_loading= True
+        
 
     
     """
     Service for handling operations related to mother's responses.
     """
-    async def generate_mom(self, audio: bytes, file_name: str, background_tasks:BackgroundTasks, model_name: str = config.LLAMA) -> MomResponse:
+    async def generate_mom(self, audio: bytes, file_name: str, background_tasks:BackgroundTasks) -> MomResponse:
         
-        model_path = os.path.join(config.LLM_MODEL_PATH, model_name)        
-        if not os.path.exists(model_path):
-            self.logger.info(f"Model {model_name} not available in {model_path}. Requested to download the model.")
-            background_tasks.add_task(self.download_quantized_model_from_huggingface, model_name)
+        if(self.model_loading):
             return MomResponse(
-                status=404,
-                mom_content="Model not available. Please wait while the model is being downloaded.",
+                status=503,
+                mom_content="System is warming up, please try again later.",
                 timestamp=datetime.now(),  # Placeholder for actual timestamp
                 audio_text=""
             )
-                     
+        
+       
+        self.logger.info("Generating MOM response from audio file: %s", file_name)             
         audio_text = ""
-        try:
-            self.logger.info("Generating MOM response from audio file: %s", file_name)
-            audio_text = await self.convert_audio_to_text(audio, file_name)
-            
+        try:            
+            audio_text = await self.convert_audio_to_text(audio, file_name)            
         except Exception as e:
             self.logger.error("Error converting audio to text: %s", str(e))
             return MomResponse( 
@@ -71,12 +85,10 @@ class MomService:
         ]
         
                 
-        model = AutoModelForCausalLM.from_pretrained(model_path)
-        tokenizer = AutoTokenizer.from_pretrained(model_path)
-        inputs = tokenizer.apply_chat_template(messages, return_tensors="pt").to("cuda" if torch.cuda.is_available() else "cpu")
-        streamer = TextStreamer(tokenizer)
-        output= model.generate( inputs, max_new_tokens=2000, streamer=streamer, do_sample=True, temperature=0.7)
-        response_text = tokenizer.decode(output[0], skip_special_tokens=True)
+        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(torch.cuda.current_device() if torch.cuda.is_available() else "cpu")
+        streamer = TextStreamer(self.tokenizer)
+        output= self.model.generate( inputs, max_new_tokens=2000, streamer=streamer, do_sample=True, temperature=0.7)
+        response_text = self.tokenizer.decode(output[0], skip_special_tokens=True)
         
         self.logger.info("MOM response generated successfully.")
         return MomResponse(
@@ -91,16 +103,19 @@ class MomService:
         """
         Converts audio to text using Whisper model.
         """
-        audio_file = io.BytesIO(audio)
-        audio_file.name = file_name
-        
-        
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:            
-            raise ValueError("OPENAI_API_KEY environment variable is not set.")
-        
-        transcription = openai.audio.transcriptions.create(model=config.AUDIO_MODEL, file=audio_file, response_format="text")        
-        return transcription
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            tmp.write(audio)
+            tmp.flush()
+            temp_name = tmp.name  # Save the file name
+
+        # Now the file is closed, so libraries can access it
+        try:
+            transcript = self.asr(temp_name)
+            return transcript["text"]
+        finally:
+            os.remove(temp_name)  # Clean up manually
+    
+    
     
     
     async def download_quantized_model_from_huggingface(self, model_name: str) -> bool:

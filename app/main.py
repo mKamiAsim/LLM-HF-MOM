@@ -19,7 +19,7 @@ def register_routers(app):
 
 
 async def background_worker():
-        await IMOMService().download_quantized_model_from_huggingface(model_name=config.LLAMA)
+        IMOMService()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
